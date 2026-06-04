@@ -178,7 +178,7 @@ textarea{resize:none;min-height:70px;font-size:14px}
   <div class="card">
     <div class="f2">
       <div class="fg" style="margin-bottom:0"><label>Data</label><input type="date" id="dataRapportino"></div>
-      <div class="fg" style="margin-bottom:0"><label>Capocantiere</label><input type="text" id="capocantiere" placeholder="Nome capocantiere"></div>
+      <div class="fg" style="margin-bottom:0"><label>Capocantiere</label><select id="capocantiere" style="background:var(--bg);border:1px solid var(--border);border-radius:6px;padding:9px 28px 9px 10px;font-family:'DM Sans',sans-serif;font-size:15px;color:var(--text);width:100%;outline:none;-webkit-appearance:none;background-image:url('data:image/svg+xml,%3Csvg xmlns=\'http://www.w3.org/2000/svg\' width=\'13\' height=\'13\' viewBox=\'0 0 24 24\' fill=\'none\' stroke=\'%237A756C\' stroke-width=\'2\'%3E%3Cpath d=\'M6 9l6 6 6-6\'/%3E%3C/svg%3E');background-repeat:no-repeat;background-position:right 9px center"><option value="">— seleziona capocantiere —</option></select></div>
     </div>
   </div>
   <div class="card" style="margin-bottom:10px">
@@ -275,7 +275,7 @@ const DB_DIPENDENTI = [
   {id:'VIT',nome:'Vitiello F.'},
 ].map(d=>({...d,ini:d.nome.split(' ').map(p=>p[0]).join('').slice(0,2).toUpperCase()}));
 
-const LAVORAZIONI=['ASSEMBLAGGIO','CANTIERIZZAZIONE','FORATURA','GESTIONE','LAV.MECCANICA','MANUTENZIONE','MONTAGGIO','MOVIMENTAZIONE','PIEGA','PREASSEMBLAGGIO','PREPARAZIONE ATTREZZATURA','RILIEVO TECNICO','SALDATURA','SGROSSATURA','TAGLIO','TAGLIO PLASMA','TAGLIO/PIEGA','TRANCIO/PUNZONATURA','TRASPORTO','VERNICIATURA','VIAGGIO','ASSENZA'];
+// Lavorazione: campo testo libero
 const UBICAZIONI=['CANTIERE','OFFICINA','UFFICIO'];
 
 const DEFAULT_IDS = ['NAS','ALL','SAN'];
@@ -348,7 +348,10 @@ function applicaSelezione(){
   const rimasti=presenti.filter(id=>tempSelezione.includes(id));
   presenti=[...rimasti,...nuovi];
   localStorage.setItem('presenti_cantiere',JSON.stringify(presenti));
-  initDati(presenti);closeModal();render();renderRip();
+  initDati(presenti);closeModal();// Popola select capocantiere
+const selCap = document.getElementById('capocantiere');
+DB_DIPENDENTI.forEach(d => { const o=document.createElement('option'); o.value=d.nome; o.textContent=d.nome; selCap.appendChild(o); });
+render();renderRip();
   showToast(`👥 ${presenti.length} operatori in lista`);
 }
 
@@ -370,7 +373,7 @@ function render(){
       h+=`<div class="c-row${r.confermato?' done':''}" id="cr-${rid}">
         <div class="c-body">
           <div class="g2">
-            <div><div class="ml">Lavorazione</div><select class="ms" id="sl-${rid}" onchange="sf('${id}',${ri},'lavorazione',this.value)" ${dis}>${opts(LAVORAZIONI,r.lavorazione,'— lavorazione —')}</select></div>
+            <div><div class="ml">Lavorazione</div><input class="ms" id="sl-${rid}" type="text" placeholder="Es. Montaggio facciate…" value="${r.lavorazione}" oninput="sf('${id}',${ri},'lavorazione',this.value)" ${dis} style="font-size:12px;padding:7px 7px"></div>
             <div><div class="ml">Ubicazione</div><select class="ms" onchange="sf('${id}',${ri},'ubicazione',this.value)" ${dis}>${opts(UBICAZIONI,r.ubicazione,'— ubi. —')}</select></div>
           </div>
         </div>
@@ -715,6 +718,9 @@ function showToast(msg){const t=document.getElementById('toast');t.textContent=m
 const today=new Date();
 document.getElementById('dataRapportino').value=today.toISOString().split('T')[0];
 document.getElementById('headerDate').textContent=today.toLocaleDateString('it-IT',{day:'2-digit',month:'short',year:'numeric'});
+// Popola select capocantiere
+const selCap = document.getElementById('capocantiere');
+DB_DIPENDENTI.forEach(d => { const o=document.createElement('option'); o.value=d.nome; o.textContent=d.nome; selCap.appendChild(o); });
 render();renderRip();
 </script>
 </body>
