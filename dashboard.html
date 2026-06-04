@@ -1,0 +1,424 @@
+<!DOCTYPE html>
+<html lang="it">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Dashboard Officina</title>
+<link href="https://fonts.googleapis.com/css2?family=DM+Mono:wght@400;500&family=DM+Sans:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+<style>
+:root{
+  --bg:#F5F3EE;--surface:#fff;--border:#E0DDD8;--text:#1A1814;
+  --muted:#7A756C;--accent:#1F4E3D;--al:#E8F0EC;--am:#2E7055;
+  --danger:#C0392B;--warn:#E67E22;
+}
+*{box-sizing:border-box;margin:0;padding:0}
+body{font-family:'DM Sans',sans-serif;background:var(--bg);color:var(--text);min-height:100vh}
+
+/* HEADER */
+.header{background:var(--accent);color:white;padding:20px 28px;display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:12px}
+.header-left h1{font-size:20px;font-weight:700;letter-spacing:-.3px}
+.header-left p{font-size:12px;opacity:.6;margin-top:2px}
+.header-right{display:flex;align-items:center;gap:12px}
+.last-update{font-size:11px;opacity:.6;font-family:'DM Mono',monospace}
+.btn-refresh{background:rgba(255,255,255,.15);border:1px solid rgba(255,255,255,.25);color:white;padding:7px 14px;border-radius:8px;cursor:pointer;font-family:'DM Sans',sans-serif;font-size:12px;font-weight:600;transition:background .15s}
+.btn-refresh:hover{background:rgba(255,255,255,.25)}
+.btn-refresh.loading{opacity:.6;cursor:default}
+
+/* LAYOUT */
+.container{max-width:1200px;margin:0 auto;padding:24px 20px}
+
+/* KPI CARDS */
+.kpi-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(180px,1fr));gap:14px;margin-bottom:24px}
+.kpi{background:var(--surface);border:1px solid var(--border);border-radius:12px;padding:16px 18px;box-shadow:0 1px 8px rgba(0,0,0,.05)}
+.kpi-label{font-size:10px;font-weight:700;color:var(--muted);text-transform:uppercase;letter-spacing:.8px;margin-bottom:6px}
+.kpi-val{font-family:'DM Mono',monospace;font-size:28px;font-weight:700;color:var(--accent);line-height:1}
+.kpi-sub{font-size:11px;color:var(--muted);margin-top:4px}
+
+/* SEZIONI */
+.section{background:var(--surface);border:1px solid var(--border);border-radius:12px;margin-bottom:20px;overflow:hidden;box-shadow:0 1px 8px rgba(0,0,0,.05)}
+.section-head{display:flex;justify-content:space-between;align-items:center;padding:14px 18px;border-bottom:1px solid var(--border);background:#FAFAF8}
+.section-head h2{font-size:13px;font-weight:700;color:var(--text)}
+.section-head span{font-size:11px;color:var(--muted)}
+.section-body{padding:16px 18px}
+
+/* FILTRI */
+.filtri{display:flex;gap:10px;flex-wrap:wrap;margin-bottom:20px}
+.filtro{display:flex;flex-direction:column;gap:4px;min-width:160px;flex:1}
+.filtro label{font-size:10px;font-weight:700;color:var(--muted);text-transform:uppercase;letter-spacing:.5px}
+.filtro select,.filtro input{background:var(--surface);border:1px solid var(--border);border-radius:7px;padding:8px 10px;font-family:'DM Sans',sans-serif;font-size:13px;color:var(--text);outline:none;-webkit-appearance:none;cursor:pointer}
+.filtro select:focus,.filtro input:focus{border-color:var(--am);box-shadow:0 0 0 3px rgba(46,112,85,.1)}
+
+/* TABELLA */
+.tbl-wrap{overflow-x:auto}
+table{width:100%;border-collapse:collapse}
+thead tr{background:#F5F3EE;border-bottom:2px solid var(--border)}
+th{font-size:10px;font-weight:700;color:var(--muted);text-transform:uppercase;letter-spacing:.6px;padding:9px 12px;text-align:left;white-space:nowrap}
+td{font-size:12px;padding:9px 12px;border-bottom:1px solid #F0EEE9;vertical-align:middle}
+tr:last-child td{border-bottom:none}
+tr:hover td{background:#FAFAF8}
+.mono{font-family:'DM Mono',monospace;font-weight:600;color:var(--accent)}
+.tag{font-family:'DM Mono',monospace;font-size:10px;background:var(--al);color:var(--accent);padding:2px 7px;border-radius:4px;font-weight:600;white-space:nowrap}
+.tag-lav{font-size:10px;background:#F0EEE9;color:var(--muted);padding:2px 7px;border-radius:4px;font-weight:500}
+.stato-ok{font-size:10px;background:#E8F5E9;color:#2E7D32;padding:2px 8px;border-radius:10px;font-weight:600}
+.stato-bz{font-size:10px;background:#FFF3E0;color:#E65100;padding:2px 8px;border-radius:10px;font-weight:600}
+
+/* BAR CHART dipendenti */
+.bar-list{display:flex;flex-direction:column;gap:10px}
+.bar-row{display:flex;align-items:center;gap:10px}
+.bar-name{font-size:12px;font-weight:500;min-width:160px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.bar-track{flex:1;background:#F0EEE9;border-radius:20px;height:14px;overflow:hidden}
+.bar-fill{height:100%;background:var(--accent);border-radius:20px;transition:width .4s ease;min-width:4px}
+.bar-val{font-family:'DM Mono',monospace;font-size:12px;font-weight:600;color:var(--accent);min-width:40px;text-align:right}
+
+/* BAR commesse */
+.bar-fill.commessa{background:var(--am)}
+
+/* EMPTY */
+.empty{text-align:center;padding:40px;color:var(--muted);font-size:13px;line-height:1.7}
+.empty-icon{font-size:32px;margin-bottom:8px}
+
+/* LOADING */
+.loading-overlay{display:flex;flex-direction:column;align-items:center;justify-content:center;padding:60px;gap:12px;color:var(--muted)}
+.spinner{width:32px;height:32px;border:3px solid var(--border);border-top-color:var(--accent);border-radius:50%;animation:spin .8s linear infinite}
+@keyframes spin{to{transform:rotate(360deg)}}
+
+/* GRIGLIA 2 col */
+.grid2{display:grid;grid-template-columns:1fr 1fr;gap:20px;margin-bottom:20px}
+@media(max-width:700px){.grid2{grid-template-columns:1fr}}
+
+/* PAGINAZIONE */
+.pag{display:flex;justify-content:center;gap:6px;margin-top:14px}
+.pag-btn{padding:5px 12px;border:1px solid var(--border);border-radius:6px;background:var(--surface);font-size:12px;cursor:pointer;font-family:'DM Sans',sans-serif}
+.pag-btn.active{background:var(--accent);color:white;border-color:var(--accent)}
+.pag-btn:disabled{opacity:.4;cursor:default}
+
+/* ERROR */
+.error-box{background:#FEF0EF;border:1px solid #F5C6C3;border-radius:10px;padding:16px 18px;color:var(--danger);font-size:13px;margin-bottom:20px;display:none}
+</style>
+</head>
+<body>
+
+<div class="header">
+  <div class="header-left">
+    <h1>📊 Dashboard Officina</h1>
+    <p>Riepilogo rapportini — Cardone Ciro</p>
+  </div>
+  <div class="header-right">
+    <span class="last-update" id="lastUpdate">—</span>
+    <button class="btn-refresh" id="btnRefresh" onclick="caricaDati()">↻ Aggiorna</button>
+  </div>
+</div>
+
+<div class="container">
+
+  <div class="error-box" id="errorBox"></div>
+
+  <!-- KPI -->
+  <div class="kpi-grid" id="kpiGrid">
+    <div class="kpi"><div class="kpi-label">Ore totali</div><div class="kpi-val" id="kpiOre">—</div><div class="kpi-sub">tutte le giornate</div></div>
+    <div class="kpi"><div class="kpi-label">Giornate</div><div class="kpi-val" id="kpiGiornate">—</div><div class="kpi-sub">rapportini inviati</div></div>
+    <div class="kpi"><div class="kpi-label">Operatori</div><div class="kpi-val" id="kpiOperatori">—</div><div class="kpi-sub">distinti nel periodo</div></div>
+    <div class="kpi"><div class="kpi-label">Commesse</div><div class="kpi-val" id="kpiCommesse">—</div><div class="kpi-sub">distinte nel periodo</div></div>
+    <div class="kpi"><div class="kpi-label">Media ore/giorno</div><div class="kpi-val" id="kpiMedia">—</div><div class="kpi-sub">ore medie giornaliere</div></div>
+  </div>
+
+  <!-- FILTRI -->
+  <div class="section">
+    <div class="section-head"><h2>🔍 Filtri</h2><span id="filtroRisultati"></span></div>
+    <div class="section-body">
+      <div class="filtri">
+        <div class="filtro"><label>Da data</label><input type="date" id="fDa"></div>
+        <div class="filtro"><label>A data</label><input type="date" id="fA"></div>
+        <div class="filtro"><label>Operatore</label><select id="fOp"><option value="">Tutti</option></select></div>
+        <div class="filtro"><label>Commessa</label><select id="fComm"><option value="">Tutte</option></select></div>
+        <div class="filtro"><label>Lavorazione</label><select id="fLav"><option value="">Tutte</option></select></div>
+      </div>
+      <button onclick="applicaFiltri()" style="padding:9px 18px;background:var(--accent);color:white;border:none;border-radius:8px;font-family:'DM Sans',sans-serif;font-size:13px;font-weight:600;cursor:pointer">Applica filtri</button>
+      <button onclick="resetFiltri()" style="padding:9px 14px;background:transparent;color:var(--muted);border:1px solid var(--border);border-radius:8px;font-family:'DM Sans',sans-serif;font-size:13px;cursor:pointer;margin-left:8px">Reset</button>
+    </div>
+  </div>
+
+  <!-- GRAFICI -->
+  <div class="grid2">
+    <div class="section">
+      <div class="section-head"><h2>👷 Ore per Operatore</h2></div>
+      <div class="section-body"><div id="barOperatori"><div class="loading-overlay"><div class="spinner"></div></div></div></div>
+    </div>
+    <div class="section">
+      <div class="section-head"><h2>🏗️ Ore per Commessa</h2></div>
+      <div class="section-body"><div id="barCommesse"><div class="loading-overlay"><div class="spinner"></div></div></div></div>
+    </div>
+  </div>
+
+  <!-- TABELLA DETTAGLIO -->
+  <div class="section">
+    <div class="section-head">
+      <h2>📋 Dettaglio Giornate</h2>
+      <span id="tblCount"></span>
+    </div>
+    <div class="section-body" style="padding:0">
+      <div class="tbl-wrap" id="tblGiornate"><div class="loading-overlay"><div class="spinner"></div><span style="font-size:13px">Caricamento dati…</span></div></div>
+      <div id="pagGiornate" class="pag" style="padding-bottom:14px"></div>
+    </div>
+  </div>
+
+  <!-- TABELLA RIGHE ORE -->
+  <div class="section">
+    <div class="section-head">
+      <h2>⏱️ Ore Dettaglio</h2>
+      <span id="tblOreCount"></span>
+    </div>
+    <div class="section-body" style="padding:0">
+      <div class="tbl-wrap" id="tblOre"><div class="loading-overlay"><div class="spinner"></div></div></div>
+      <div id="pagOre" class="pag" style="padding-bottom:14px"></div>
+    </div>
+  </div>
+
+</div>
+
+<script>
+// ══════════════════════════════════════════
+// ⚙️ CONFIGURAZIONE
+// ══════════════════════════════════════════
+const APPS_SCRIPT_URL = 'https://script.google.com/macros/s/AKfycbw3EDUZR3SCDEp-KFmD6i6706DarqOG-phtHNR0wDzongBxspwv8z7hEozefayUC8qd/exec';
+
+// ══════════════════════════════════════════
+let righeAll = [];
+let giornateAll = [];
+let righeFiltrate = [];
+let giornateFiltrate = [];
+let pagRighe = 1;
+let pagGiorn = 1;
+const PER_PAG = 20;
+
+async function caricaDati() {
+  const btn = document.getElementById('btnRefresh');
+  btn.classList.add('loading'); btn.textContent = '↻ Caricamento…';
+  document.getElementById('errorBox').style.display = 'none';
+
+  try {
+    const url = APPS_SCRIPT_URL + '?action=leggi';
+    const res = await fetch(url);
+    const data = await res.json();
+
+    if (!data.ok) throw new Error(data.error || 'Errore sconosciuto');
+
+    righeAll = data.dettaglio || [];
+    giornateAll = data.riepilogo || [];
+
+    popolaFiltri();
+    applicaFiltri();
+
+    document.getElementById('lastUpdate').textContent = 'Aggiornato: ' + new Date().toLocaleTimeString('it-IT');
+  } catch(e) {
+    const eb = document.getElementById('errorBox');
+    eb.style.display = 'block';
+    eb.textContent = '⚠️ Errore nel caricamento: ' + e.message;
+  }
+
+  btn.classList.remove('loading'); btn.textContent = '↻ Aggiorna';
+}
+
+function popolaFiltri() {
+  const ops = [...new Set(righeAll.map(r => r['Operatore']).filter(Boolean))].sort();
+  const comms = [...new Set(righeAll.map(r => r['Commessa']).filter(Boolean))].sort();
+  const lavs = [...new Set(righeAll.map(r => r['Lavorazione']).filter(Boolean))].sort();
+
+  setOpts('fOp', ops);
+  setOpts('fComm', comms);
+  setOpts('fLav', lavs);
+}
+
+function setOpts(id, arr) {
+  const sel = document.getElementById(id);
+  const cur = sel.value;
+  sel.innerHTML = '<option value="">Tutti/Tutte</option>' + arr.map(v => `<option${v===cur?' selected':''}>${v}</option>`).join('');
+}
+
+function applicaFiltri() {
+  const da = document.getElementById('fDa').value;
+  const a  = document.getElementById('fA').value;
+  const op = document.getElementById('fOp').value;
+  const cm = document.getElementById('fComm').value;
+  const lv = document.getElementById('fLav').value;
+
+  righeFiltrate = righeAll.filter(r => {
+    if (da && r['Data'] && r['Data'] < da) return false;
+    if (a  && r['Data'] && r['Data'] > a)  return false;
+    if (op && r['Operatore'] !== op) return false;
+    if (cm && r['Commessa'] !== cm) return false;
+    if (lv && r['Lavorazione'] !== lv) return false;
+    return true;
+  });
+
+  giornateFiltrate = giornateAll.filter(r => {
+    if (da && r['Data'] && r['Data'] < da) return false;
+    if (a  && r['Data'] && r['Data'] > a)  return false;
+    return true;
+  });
+
+  document.getElementById('filtroRisultati').textContent = `${righeFiltrate.length} righe, ${giornateFiltrate.length} giornate`;
+
+  aggiornaKPI();
+  renderBarOperatori();
+  renderBarCommesse();
+  pagRighe = 1; pagGiorn = 1;
+  renderTblGiornate();
+  renderTblOre();
+}
+
+function resetFiltri() {
+  ['fDa','fA'].forEach(id => document.getElementById(id).value = '');
+  ['fOp','fComm','fLav'].forEach(id => document.getElementById(id).value = '');
+  applicaFiltri();
+}
+
+function aggiornaKPI() {
+  const totOre = righeFiltrate.reduce((s,r) => s + (parseFloat(r['Ore']) || 0), 0);
+  const giornate = new Set(righeFiltrate.map(r => r['Data'])).size;
+  const operatori = new Set(righeFiltrate.map(r => r['Operatore'])).size;
+  const commesse = new Set(righeFiltrate.map(r => r['Commessa'])).size;
+  const media = giornate ? (totOre / giornate).toFixed(1) : 0;
+
+  document.getElementById('kpiOre').textContent = totOre;
+  document.getElementById('kpiGiornate').textContent = giornate;
+  document.getElementById('kpiOperatori').textContent = operatori;
+  document.getElementById('kpiCommesse').textContent = commesse;
+  document.getElementById('kpiMedia').textContent = media;
+}
+
+function renderBarOperatori() {
+  const map = {};
+  righeFiltrate.forEach(r => {
+    const k = r['Operatore'] || '—';
+    map[k] = (map[k] || 0) + (parseFloat(r['Ore']) || 0);
+  });
+  const entries = Object.entries(map).sort((a,b) => b[1]-a[1]);
+  const max = entries[0]?.[1] || 1;
+
+  if (!entries.length) {
+    document.getElementById('barOperatori').innerHTML = '<div class="empty"><div class="empty-icon">👷</div>Nessun dato</div>';
+    return;
+  }
+
+  document.getElementById('barOperatori').innerHTML = `<div class="bar-list">${
+    entries.map(([nome, ore]) => `<div class="bar-row">
+      <span class="bar-name" title="${nome}">${nome.split(' ')[0]}</span>
+      <div class="bar-track"><div class="bar-fill" style="width:${(ore/max*100).toFixed(1)}%"></div></div>
+      <span class="bar-val">${ore}h</span>
+    </div>`).join('')
+  }</div>`;
+}
+
+function renderBarCommesse() {
+  const map = {};
+  righeFiltrate.forEach(r => {
+    const k = r['Commessa'] || '—';
+    map[k] = (map[k] || 0) + (parseFloat(r['Ore']) || 0);
+  });
+  const entries = Object.entries(map).sort((a,b) => b[1]-a[1]).slice(0,15);
+  const max = entries[0]?.[1] || 1;
+
+  if (!entries.length) {
+    document.getElementById('barCommesse').innerHTML = '<div class="empty"><div class="empty-icon">🏗️</div>Nessun dato</div>';
+    return;
+  }
+
+  document.getElementById('barCommesse').innerHTML = `<div class="bar-list">${
+    entries.map(([comm, ore]) => `<div class="bar-row">
+      <span class="bar-name" title="${comm}" style="font-family:'DM Mono',monospace;font-size:11px">${comm}</span>
+      <div class="bar-track"><div class="bar-fill commessa" style="width:${(ore/max*100).toFixed(1)}%"></div></div>
+      <span class="bar-val">${ore}h</span>
+    </div>`).join('')
+  }</div>`;
+}
+
+function renderTblGiornate() {
+  const start = (pagGiorn-1)*PER_PAG;
+  const slice = giornateFiltrate.slice(start, start+PER_PAG);
+  document.getElementById('tblCount').textContent = `${giornateFiltrate.length} giornate`;
+
+  if (!slice.length) {
+    document.getElementById('tblGiornate').innerHTML = '<div class="empty"><div class="empty-icon">📅</div>Nessuna giornata trovata</div>';
+    document.getElementById('pagGiornate').innerHTML = '';
+    return;
+  }
+
+  document.getElementById('tblGiornate').innerHTML = `<table>
+    <thead><tr>
+      <th>Data</th><th>Responsabile</th><th>N. Operatori</th>
+      <th>Ore Totali</th><th>Stato</th>
+    </tr></thead>
+    <tbody>${slice.map(r => {
+      const d = new Date(r['Data']+'T12:00:00');
+      const ds = isNaN(d) ? r['Data'] : d.toLocaleDateString('it-IT',{weekday:'short',day:'2-digit',month:'short',year:'numeric'});
+      return `<tr>
+        <td style="font-weight:600">${ds}</td>
+        <td>${r['Responsabile']||'—'}</td>
+        <td><span class="mono">${r['N. Operatori']||'—'}</span></td>
+        <td><span class="mono">${r['Ore Totali']||'—'}h</span></td>
+        <td><span class="${r['Stato']==='inviato'?'stato-ok':'stato-bz'}">${r['Stato']==='inviato'?'✓ Inviato':'✏️ Bozza'}</span></td>
+      </tr>`;
+    }).join('')}</tbody>
+  </table>`;
+
+  renderPag('pagGiornate', giornateFiltrate.length, pagGiorn, n => { pagGiorn=n; renderTblGiornate(); });
+}
+
+function renderTblOre() {
+  const start = (pagRighe-1)*PER_PAG;
+  const slice = righeFiltrate.slice(start, start+PER_PAG);
+  document.getElementById('tblOreCount').textContent = `${righeFiltrate.length} righe`;
+
+  if (!slice.length) {
+    document.getElementById('tblOre').innerHTML = '<div class="empty"><div class="empty-icon">⏱️</div>Nessuna riga trovata</div>';
+    document.getElementById('pagOre').innerHTML = '';
+    return;
+  }
+
+  document.getElementById('tblOre').innerHTML = `<table>
+    <thead><tr>
+      <th>Data</th><th>Operatore</th><th>Commessa</th>
+      <th>Lavorazione</th><th>Tipologia</th><th>Ubicazione</th><th>Ore</th>
+    </tr></thead>
+    <tbody>${slice.map(r => {
+      const d = new Date(r['Data']+'T12:00:00');
+      const ds = isNaN(d) ? r['Data'] : d.toLocaleDateString('it-IT',{day:'2-digit',month:'short'});
+      return `<tr>
+        <td style="white-space:nowrap">${ds}</td>
+        <td style="font-weight:500">${r['Operatore']||'—'}</td>
+        <td><span class="tag">${r['Commessa']||'—'}</span></td>
+        <td><span class="tag-lav">${r['Lavorazione']||'—'}</span></td>
+        <td style="font-size:11px;color:var(--muted)">${r['Tipologia']||'—'}</td>
+        <td style="font-size:11px;color:var(--muted)">${r['Ubicazione']||'—'}</td>
+        <td><span class="mono">${r['Ore']||0}h</span></td>
+      </tr>`;
+    }).join('')}</tbody>
+  </table>`;
+
+  renderPag('pagOre', righeFiltrate.length, pagRighe, n => { pagRighe=n; renderTblOre(); });
+}
+
+function renderPag(elId, total, cur, cb) {
+  const pages = Math.ceil(total/PER_PAG);
+  if (pages <= 1) { document.getElementById(elId).innerHTML=''; return; }
+  let html = '';
+  for (let i=1; i<=pages; i++) {
+    if (i===1||i===pages||Math.abs(i-cur)<=2) {
+      html += `<button class="pag-btn${i===cur?' active':''}" onclick="(${cb.toString()})(${i})">${i}</button>`;
+    } else if (Math.abs(i-cur)===3) {
+      html += `<span style="padding:5px 4px;color:var(--muted)">…</span>`;
+    }
+  }
+  document.getElementById(elId).innerHTML = html;
+}
+
+// ══════════════════════════════════════════
+// IMPORTANTE: il foglio deve essere condiviso
+// in lettura pubblica per funzionare.
+// File → Condividi → Chiunque abbia il link → Visualizzatore
+// ══════════════════════════════════════════
+caricaDati();
+</script>
+</body>
+</html>
