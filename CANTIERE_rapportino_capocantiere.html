@@ -350,6 +350,7 @@ label{display:block;font-size:10px;font-weight:700;color:var(--muted);margin-bot
   </div>
   <div id="dipList"></div>
   <div class="tot-bar"><span>Totale ore confermate</span><span class="tot-n" id="totDisplay">0h</span></div>
+  <button class="btn-conf" id="btnVaiRiepilogo" style="display:none" onclick="goPage(2)">📊 Vai al Riepilogo per Salvare</button>
 </div>
 
 <!-- PAGE 2: RIEPILOGO + FIRMA -->
@@ -954,6 +955,7 @@ async function confermaSalva(){
     document.getElementById('noteGiornata').value='';
     document.getElementById('bannerModifica').style.display = 'none';
     document.getElementById('btnConf').textContent = '✓ Conferma, Salva e Invia PDF';
+    document.getElementById('btnVaiRiepilogo').style.display = 'none';
     clearFirma();render();renderRip();goPage(3);
   },800);
 }
@@ -1039,7 +1041,8 @@ async function modificaRapportino(){
   banner.style.display = 'flex';
   document.getElementById('bannerModificaInfo').textContent = `${fmtData(r.data)} · ${r.commessa_id}`;
   document.getElementById('btnConf').textContent = '💾 Salva Modifiche';
-  showToast('✏️ Modifica gli operatori e premi "Salva Modifiche"');
+  document.getElementById('btnVaiRiepilogo').style.display = 'block';
+  showToast('✏️ Modifica gli operatori, poi premi "Vai al Riepilogo per Salvare"');
 }
 
 function annullaModifica(){
@@ -1048,6 +1051,7 @@ function annullaModifica(){
   document.getElementById('bannerModifica').style.display = 'none';
   document.getElementById('dataRapportino').disabled = false;
   document.getElementById('btnConf').textContent = '✓ Conferma, Salva e Invia PDF';
+  document.getElementById('btnVaiRiepilogo').style.display = 'none';
   presenti.forEach(id=>{dati[id]=[newR()]});
   document.getElementById('dataRapportino').value=new Date().toISOString().split('T')[0];
   document.getElementById('noteGiornata').value='';
