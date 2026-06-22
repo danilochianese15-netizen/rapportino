@@ -1,0 +1,46 @@
+<!DOCTYPE html>
+<html>
+<head><meta charset="UTF-8"><title>Test invio</title></head>
+<body style="font-family:sans-serif;padding:20px">
+<h2>Test invio diretto allo script</h2>
+<button onclick="testInvio()" style="padding:15px 30px;font-size:16px">INVIA TEST</button>
+<pre id="risultato" style="background:#eee;padding:15px;margin-top:20px;white-space:pre-wrap"></pre>
+
+<script>
+const APPS_URL = 'https://script.google.com/macros/s/AKfycbyAGIBmyZFRx-hKUB6vq-vVDcb8VVpn_uMSjrFbl-TJOUuWE-RWcdhSCTSQcTV_r1Y/exec';
+
+async function testInvio(){
+  const out = document.getElementById('risultato');
+  out.textContent = 'Invio in corso...';
+
+  const payload = {
+    id: 'TEST-C24032A00-2026-06-22',
+    data: '2026-06-22',
+    note: 'Test diretto',
+    capocantiere: 'Test Capocantiere',
+    commessa_id: 'C24032A00',
+    commessa_desc: 'TEST COMMESSA',
+    timestamp: new Date().toISOString(),
+    totale_ore: 8,
+    operatori: [
+      { id:'TEST', nome:'Test Operatore', ini:'TO', totale_ore:8,
+        righe: [{lavorazione:'TEST', ubicazione:'CANTIERE', ore:8, notturno:false, confermato:true}] }
+    ],
+    status: 'inviato'
+  };
+
+  try {
+    const res = await fetch(APPS_URL, {
+      method: 'POST',
+      headers: {'Content-Type':'text/plain'},
+      body: JSON.stringify(payload)
+    });
+    const text = await res.text();
+    out.textContent = 'RISPOSTA RICEVUTA:\n' + text;
+  } catch(e) {
+    out.textContent = 'ERRORE FETCH:\n' + e.toString();
+  }
+}
+</script>
+</body>
+</html>
