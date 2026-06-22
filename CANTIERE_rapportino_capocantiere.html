@@ -472,31 +472,55 @@ function fmtData(raw){ const d=new Date(raw+'T12:00:00'); return d.toLocaleDateS
 // ══════════════ COMMESSE PERSONALIZZATE ══════════════
 const COMM_KEY = 'commesse_cantiere';
 
+let _commesseCache = null;
+
 function getCommesse(){
+  // Usa la cache se disponibile (caricata da Google Sheet)
+  if (_commesseCache) return _commesseCache;
+  // Fallback: lista base + eventuale cache locale residua (compatibilità vecchie versioni)
   const custom = JSON.parse(localStorage.getItem(COMM_KEY)||'[]');
   return [...COMMESSE, ...custom];
 }
 
-function aggiungiCommessa(){
+async function caricaCommesseRemote(){
+  try{
+    const res = await fetch(`${APPS_URL}?action=leggi_commesse`);
+    const data = await res.json();
+    if(data.ok && data.commesse){
+      // Unisci con la lista base, evitando duplicati
+      const remote = data.commesse;
+      const baseIds = new Set(COMMESSE.map(c=>c.id));
+      const soloRemote = remote.filter(c=>!baseIds.has(c.id));
+      _commesseCache = [...COMMESSE, ...soloRemote];
+      // Cache locale di backup (usata solo se offline)
+      localStorage.setItem(COMM_KEY, JSON.stringify(soloRemote));
+      aggiornaSelectCommesse();
+    }
+  }catch(e){ console.log('Commesse remote non disponibili, uso cache locale'); }
+}
+
+async function aggiungiCommessa(){
   const id = document.getElementById('newCommId').value.trim().toUpperCase();
   const desc = document.getElementById('newCommDesc').value.trim().toUpperCase();
   if(!id || !desc){ showToast('⚠️ Inserisci codice e descrizione'); return; }
-  const custom = JSON.parse(localStorage.getItem(COMM_KEY)||'[]');
   if(getCommesse().find(c=>c.id===id)){ showToast('Commessa già presente'); return; }
-  custom.push({id, desc});
-  localStorage.setItem(COMM_KEY, JSON.stringify(custom));
-  document.getElementById('newCommId').value = '';
-  document.getElementById('newCommDesc').value = '';
-  aggiornaSelectCommesse();
-  renderCommesseLista();
-  showToast('✅ Commessa aggiunta!');
+  showToast('⏳ Salvataggio commessa…');
+  try{
+    await fetch(APPS_URL,{method:'POST',headers:{'Content-Type':'text/plain'},body:JSON.stringify({tipo:'aggiungi_commessa',commessa_id:id,commessa_desc:desc})});
+    await caricaCommesseRemote();
+    document.getElementById('newCommId').value = '';
+    document.getElementById('newCommDesc').value = '';
+    renderCommesseLista();
+    showToast('✅ Commessa aggiunta e condivisa!');
+  }catch(e){
+    showToast('⚠️ Errore di connessione, riprova');
+  }
 }
 
 function eliminaCommessaCustom(id){
-  const custom = JSON.parse(localStorage.getItem(COMM_KEY)||'[]');
-  localStorage.setItem(COMM_KEY, JSON.stringify(custom.filter(c=>c.id!==id)));
-  aggiornaSelectCommesse();
-  renderCommesseLista();
+  // Le commesse sono condivise su Google Sheet: l'eliminazione qui rimuove solo
+  // dalla cache locale di questo dispositivo, non dal foglio condiviso.
+  showToast('ℹ️ Per rimuovere una commessa contatta l\'ufficio');
 }
 
 function aggiornaSelectCommesse(){
@@ -513,12 +537,12 @@ function aggiornaSelectCommesse(){
 function renderCommesseLista(){
   const box = document.getElementById('commesseLista');
   if(!box) return;
-  const custom = JSON.parse(localStorage.getItem(COMM_KEY)||'[]');
-  if(!custom.length){ box.innerHTML='<div style="font-size:11px;color:var(--muted);text-align:center;padding:8px">Nessuna commessa aggiunta</div>'; return; }
-  box.innerHTML = '<div style="font-size:10px;font-weight:700;color:var(--muted);text-transform:uppercase;letter-spacing:.5px;margin-bottom:6px">Commesse aggiunte</div>' +
-    custom.map(c=>`<div style="display:flex;align-items:center;justify-content:space-between;padding:7px 10px;background:var(--bg);border-radius:7px;margin-bottom:6px;font-size:12px">
+  const baseIds = new Set(COMMESSE.map(c=>c.id));
+  const extra = getCommesse().filter(c=>!baseIds.has(c.id));
+  if(!extra.length){ box.innerHTML='<div style="font-size:11px;color:var(--muted);text-align:center;padding:8px">Nessuna commessa extra aggiunta</div>'; return; }
+  box.innerHTML = '<div style="font-size:10px;font-weight:700;color:var(--muted);text-transform:uppercase;letter-spacing:.5px;margin-bottom:6px">Commesse condivise aggiunte</div>' +
+    extra.map(c=>`<div style="display:flex;align-items:center;justify-content:space-between;padding:7px 10px;background:var(--bg);border-radius:7px;margin-bottom:6px;font-size:12px">
       <div><div style="font-weight:600;font-family:'DM Mono',monospace;font-size:11px">${c.id}</div><div style="color:var(--muted)">${c.desc}</div></div>
-      <button onclick="eliminaCommessaCustom('${c.id}')" style="background:none;border:none;color:var(--danger);font-size:16px;cursor:pointer;padding:2px 6px">✕</button>
     </div>`).join('');
 }
 
@@ -528,29 +552,33 @@ function toggleSetupAddComm(){
   f.style.display = f.style.display === 'none' ? 'block' : 'none';
 }
 
-function aggiungiCommessaSetup(){
+async function aggiungiCommessaSetup(){
   const id = document.getElementById('setupNewCommId').value.trim().toUpperCase();
   const desc = document.getElementById('setupNewCommDesc').value.trim().toUpperCase();
   if(!id || !desc){ showToast('⚠️ Inserisci codice e descrizione'); return; }
   if(getCommesse().find(c=>c.id===id)){ showToast('Commessa già presente'); return; }
-  const custom = JSON.parse(localStorage.getItem(COMM_KEY)||'[]');
-  custom.push({id, desc});
-  localStorage.setItem(COMM_KEY, JSON.stringify(custom));
-  aggiornaSelectCommesse();
-  document.getElementById('setupCommessa').value = id;
-  document.getElementById('setupNewCommId').value = '';
-  document.getElementById('setupNewCommDesc').value = '';
-  document.getElementById('setupNewCommForm').style.display = 'none';
-  document.getElementById('btnSetup').disabled = !document.getElementById('setupCapo').value;
-  showToast('✅ Commessa aggiunta e selezionata!');
+  showToast('⏳ Salvataggio commessa…');
+  try{
+    await fetch(APPS_URL,{method:'POST',headers:{'Content-Type':'text/plain'},body:JSON.stringify({tipo:'aggiungi_commessa',commessa_id:id,commessa_desc:desc})});
+    await caricaCommesseRemote();
+    document.getElementById('setupCommessa').value = id;
+    document.getElementById('setupNewCommId').value = '';
+    document.getElementById('setupNewCommDesc').value = '';
+    document.getElementById('setupNewCommForm').style.display = 'none';
+    document.getElementById('btnSetup').disabled = !document.getElementById('setupCapo').value;
+    showToast('✅ Commessa aggiunta e selezionata!');
+  }catch(e){
+    showToast('⚠️ Errore di connessione, riprova');
+  }
 }
 
 // ══════════════ SETUP ══════════════
-function initSetup(){
+async function initSetup(){
   const selCapo = document.getElementById('setupCapo');
   const selComm = document.getElementById('setupCommessa');
   DB_DIPENDENTI.forEach(d=>{ const o=document.createElement('option');o.value=d.nome;o.textContent=d.nome;selCapo.appendChild(o); });
-  aggiornaSelectCommesse();
+  aggiornaSelectCommesse(); // mostra subito la lista base/cache mentre carica
+  await caricaCommesseRemote(); // poi aggiorna con i dati dal server
   [selCapo,selComm].forEach(s=>s.addEventListener('change',()=>{
     document.getElementById('btnSetup').disabled = !selCapo.value || !selComm.value;
   }));
@@ -566,13 +594,15 @@ function completaSetup(){
   avviaApp();
 }
 
-function apriImpostazioni(){
+async function apriImpostazioni(){
   const sc = document.getElementById('settCapo');
   const sm = document.getElementById('settComm');
   sc.innerHTML = DB_DIPENDENTI.map(d=>`<option value="${d.nome}"${d.nome===cfg?.capo?' selected':''}>${d.nome}</option>`).join('');
   aggiornaSelectCommesse(); renderCommesseLista();
   const emailExtra = localStorage.getItem('email_extra_cantiere')||''; document.getElementById('settEmailExtra').value = emailExtra;
   document.getElementById('modalSettings').classList.add('open');
+  await caricaCommesseRemote(); // aggiorna con i dati più recenti dal server
+  renderCommesseLista();
 }
 
 function salvaImpostazioni(){
@@ -1009,17 +1039,13 @@ async function caricaDashboard(){
     const res=await fetch(`${APPS_URL}?action=leggi&commessa=${cfg.commessa_id}`);
     const data=await res.json();
     if(data.ok) righe=data.dettaglio||[];
-  }catch(e){}
-  // Aggiungi dati locali non ancora sincronizzati
-  getRapportini().filter(r=>r.commessa_id===cfg.commessa_id).forEach(rap=>{
-    (rap.operatori||[]).forEach(op=>{
-      (op.righe||[]).filter(r=>r.confermato).forEach(r=>{
-        if(!righe.find(x=>x.Data===rap.data&&x.Operatore===op.nome&&x.Lavorazione===r.lavorazione)){
-          righe.push({Data:rap.data,Operatore:op.nome,Lavorazione:r.lavorazione,Ore:r.ore,Notturno:r.notturno?'SI':'NO'});
-        }
-      });
-    });
-  });
+  }catch(e){
+    box.innerHTML='<div class="loading-dash">⚠️ Errore di connessione al foglio Google.<br>Riprova più tardi.</div>';
+    return;
+  }
+  // La dashboard si basa SOLO sul Google Sheet (fonte unica e sincronizzata).
+  // I rapportini salvati solo in locale (non ancora inviati) non vengono qui contati,
+  // per evitare di duplicare le ore già presenti sul foglio.
   if(!righe.length){box.innerHTML='<div class="loading-dash">Nessun dato per questa commessa</div>';return;}
   const totOre=righe.reduce((s,r)=>s+(parseFloat(r.Ore)||0),0);
   const nGiorni=new Set(righe.map(r=>r.Data)).size;
