@@ -928,6 +928,14 @@ async function confermaSalva(){
   st.unshift({...payload,firmaDataUrl});
   salvaRapportini(st);
   btn.textContent='⏳ Invio…';
+  // Se questo salvataggio è una MODIFICA e la data è cambiata,
+  // elimina prima la vecchia riga sul Google Sheet per evitare doppioni.
+  if(_modificaOriginale && (_modificaOriginale.data !== payload.data || _modificaOriginale.commessa_id !== payload.commessa_id)){
+    try{
+      await fetch(APPS_URL,{method:'POST',headers:{'Content-Type':'text/plain'},body:JSON.stringify({tipo:'elimina',data:_modificaOriginale.data,commessa_id:_modificaOriginale.commessa_id})});
+    }catch(e){ console.log('Pulizia vecchia riga:', e); }
+  }
+  _modificaOriginale = null;
   try{
     await fetch(APPS_URL,{method:'POST',headers:{'Content-Type':'text/plain'},body:JSON.stringify({...payload,pdfBase64,emailDest:EMAIL_DEST,emailExtra:localStorage.getItem('email_extra_cantiere')||'',tipo:'cantiere'})});
     showToast('✅ PDF scaricato + inviato!');
@@ -995,9 +1003,14 @@ function scaricaPdfStorico(){
   showToast('📄 PDF scaricato!');
 }
 
-function modificaRapportino(){
+let _modificaOriginale = null; // {data, commessa_id} del rapportino in modifica
+
+async function modificaRapportino(){
   if(!rapportinoDettaglio)return;
   const r=rapportinoDettaglio;
+  // Memorizza data+commessa originali: servono per eliminare la vecchia riga
+  // dal Google Sheet al momento del ri-salvataggio, anche se la data viene cambiata.
+  _modificaOriginale = { data: r.data, commessa_id: r.commessa_id };
   document.getElementById('dataRapportino').value=r.data;
   document.getElementById('noteGiornata').value=r.note||'';
   presenti=r.operatori.map(o=>o.id);
