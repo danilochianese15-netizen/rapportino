@@ -961,20 +961,79 @@ async function confermaSalva(){
 }
 
 // ══════════════ STORICO ══════════════
-function renderStorico(query){
+let _storicoRemoteCache = null; // cache dei rapportini ricostruiti dal Google Sheet
+
+async function caricaStoricoRemote(){
+  if(!cfg || !cfg.commessa_id) return [];
+  try{
+    const res = await fetch(`${APPS_URL}?action=leggi&commessa=${cfg.commessa_id}`);
+    const data = await res.json();
+    if(!data.ok) return [];
+    // Ricostruisce un "rapportino" per ogni riga di Giornate, raggruppando il dettaglio per ID
+    const dettaglio = data.dettaglio || [];
+    const giornate = data.giornate || [];
+    const dettaglioPerId = {};
+    dettaglio.forEach(r => {
+      const id = r.ID;
+      if(!dettaglioPerId[id]) dettaglioPerId[id] = [];
+      dettaglioPerId[id].push(r);
+    });
+    return giornate.map(g => {
+      const righeGiorno = dettaglioPerId[g.ID] || [];
+      // Raggruppa per operatore
+      const perOperatore = {};
+      righeGiorno.forEach(r => {
+        const nome = r.Operatore;
+        if(!perOperatore[nome]) perOperatore[nome] = [];
+        perOperatore[nome].push({
+          lavorazione: r.Lavorazione || '',
+          ubicazione: r.Ubicazione || '',
+          ore: parseFloat(r.Ore) || 0,
+          notturno: r.Notturno === 'SI',
+          confermato: true
+        });
+      });
+      const operatori = Object.entries(perOperatore).map(([nome, righe]) => ({
+        id: nome, nome, ini: nome.split(' ').map(p=>p[0]).join('').slice(0,2).toUpperCase(),
+        totale_ore: righe.reduce((s,r)=>s+r.ore,0), righe
+      }));
+      return {
+        id: g.ID, data: g.Data ? g.Data.substring(0,10) : '',
+        note: g.Note || '', capocantiere: g.Capocantiere || '',
+        commessa_id: g.Commessa, commessa_desc: g.CommessaDesc || '',
+        timestamp: g.Timestamp, totale_ore: parseFloat(g['Ore Totali']) || 0,
+        operatori, status: g.Status || 'inviato', _fonte: 'remote'
+      };
+    });
+  }catch(e){ console.log('Errore caricamento storico remoto:', e); return []; }
+}
+
+async function renderStorico(query){
   const box=document.getElementById('storicoList');
-  let st=getRapportini().filter(r=>!cfg||r.commessa_id===cfg.commessa_id);
+  box.innerHTML = '<div class="st-empty">⏳ Caricamento storico…</div>';
+
+  const locale = getRapportini().filter(r=>!cfg||r.commessa_id===cfg.commessa_id);
+  const remote = await caricaStoricoRemote();
+
+  // Unisci: locale ha priorità (più recente/modificabile), evita duplicati per ID
+  const idLocali = new Set(locale.map(r=>r.id));
+  const remoteFiltrati = remote.filter(r=>!idLocali.has(r.id));
+  let st = [...locale, ...remoteFiltrati].sort((a,b)=>b.data.localeCompare(a.data));
+
   const q=(query||'').toLowerCase().trim();
   if(q) st=st.filter(r=>r.data.includes(q)||r.capocantiere?.toLowerCase().includes(q));
+
   document.getElementById('storicoLabel').textContent=`Rapportini (${st.length})`;
   if(!st.length){box.innerHTML='<div class="st-empty">Nessun rapportino ancora.</div>';return;}
+
   box.innerHTML=st.map(r=>{
     const d=new Date(r.data+'T12:00:00');
     const ds=d.toLocaleDateString('it-IT',{weekday:'short',day:'2-digit',month:'short',year:'numeric'});
+    const badge = r._fonte==='remote' ? '<span style="font-size:9px;background:#EEF2FF;color:#3730a3;padding:1px 6px;border-radius:4px;font-weight:600;margin-left:4px">storico</span>' : '';
     return`<div class="st-day-row" onclick="apriDettaglio('${r.id}')">
       <div class="st-day-icon">📅</div>
       <div class="st-day-info">
-        <div class="st-day-date">${ds}</div>
+        <div class="st-day-date">${ds}${badge}</div>
         <div class="st-day-meta">${r.operatori?.length||0} operatori · ${r.totale_ore}h</div>
       </div>
       <div style="display:flex;flex-direction:column;align-items:flex-end;gap:4px">
@@ -984,10 +1043,15 @@ function renderStorico(query){
       <span class="chevron">›</span>
     </div>`;
   }).join('');
+
+  // Salva la lista completa in cache per apriDettaglio
+  _storicoRemoteCache = st;
 }
 
 function apriDettaglio(id){
-  const r=getRapportini().find(x=>x.id===id);if(!r)return;
+  let r=getRapportini().find(x=>x.id===id);
+  if(!r && _storicoRemoteCache) r=_storicoRemoteCache.find(x=>x.id===id);
+  if(!r)return;
   rapportinoDettaglio=r;
   document.getElementById('detDateBig').textContent=fmtData(r.data);
   document.getElementById('detSub').textContent=`${r.totale_ore}h · ${r.capocantiere||''} · ${r.commessa_id}`;
