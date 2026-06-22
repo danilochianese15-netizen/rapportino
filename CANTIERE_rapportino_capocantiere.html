@@ -334,6 +334,10 @@ label{display:block;font-size:10px;font-weight:700;color:var(--muted);margin-bot
 
 <!-- PAGE 1: INSERIMENTO -->
 <div class="page active" id="page1">
+  <div id="bannerModifica" style="display:none;background:#FFF3E0;border:1.5px solid #F0C078;border-radius:10px;padding:11px 14px;margin-bottom:12px;display:flex;align-items:center;justify-content:space-between;gap:10px">
+    <div style="font-size:12px;color:#8a5a00;font-weight:600">✏️ Stai modificando un rapportino esistente<br><span id="bannerModificaInfo" style="font-weight:400;font-size:11px"></span></div>
+    <button onclick="annullaModifica()" style="background:white;border:1px solid #F0C078;border-radius:7px;padding:6px 10px;font-size:11px;font-weight:600;color:#8a5a00;cursor:pointer;white-space:nowrap">✕ Annulla</button>
+  </div>
   <div class="card">
     <div class="f2">
       <div class="fg" style="margin-bottom:0"><label>Data</label><input type="date" id="dataRapportino"></div>
@@ -946,7 +950,10 @@ async function confermaSalva(){
   setTimeout(()=>{
     presenti.forEach(id=>{dati[id]=[newR()]});
     document.getElementById('dataRapportino').value=new Date().toISOString().split('T')[0];
+    document.getElementById('dataRapportino').disabled = false;
     document.getElementById('noteGiornata').value='';
+    document.getElementById('bannerModifica').style.display = 'none';
+    document.getElementById('btnConf').textContent = '✓ Conferma, Salva e Invia PDF';
     clearFirma();render();renderRip();goPage(3);
   },800);
 }
@@ -1005,15 +1012,16 @@ function scaricaPdfStorico(){
   showToast('📄 PDF scaricato!');
 }
 
-let _modificaOriginale = null; // {data, commessa_id} del rapportino in modifica
+let _modificaOriginale = null; // {data, commessa_id, id} del rapportino in modifica
 
 async function modificaRapportino(){
   if(!rapportinoDettaglio)return;
   const r=rapportinoDettaglio;
-  // Memorizza data+commessa originali: servono per eliminare la vecchia riga
-  // dal Google Sheet al momento del ri-salvataggio, anche se la data viene cambiata.
+  // Memorizza data+commessa+id originali: servono per identificare e sostituire
+  // la riga corretta sul Google Sheet al momento del ri-salvataggio.
   _modificaOriginale = { data: r.data, commessa_id: r.commessa_id, id: r.id };
   document.getElementById('dataRapportino').value=r.data;
+  document.getElementById('dataRapportino').disabled = true; // blocca la data durante la modifica
   document.getElementById('noteGiornata').value=r.note||'';
   presenti=r.operatori.map(o=>o.id);
   localStorage.setItem(PRES_KEY,JSON.stringify(presenti));
@@ -1026,7 +1034,26 @@ async function modificaRapportino(){
   goBackStorico();
   goPage(1);
   render();
-  showToast('✏️ Modifica il rapportino e ri-salva');
+  // Mostra banner modifica
+  const banner = document.getElementById('bannerModifica');
+  banner.style.display = 'flex';
+  document.getElementById('bannerModificaInfo').textContent = `${fmtData(r.data)} · ${r.commessa_id}`;
+  document.getElementById('btnConf').textContent = '💾 Salva Modifiche';
+  showToast('✏️ Modifica gli operatori e premi "Salva Modifiche"');
+}
+
+function annullaModifica(){
+  if(!confirm('Annullare la modifica? Le modifiche non salvate andranno perse.'))return;
+  _modificaOriginale = null;
+  document.getElementById('bannerModifica').style.display = 'none';
+  document.getElementById('dataRapportino').disabled = false;
+  document.getElementById('btnConf').textContent = '✓ Conferma, Salva e Invia PDF';
+  presenti.forEach(id=>{dati[id]=[newR()]});
+  document.getElementById('dataRapportino').value=new Date().toISOString().split('T')[0];
+  document.getElementById('noteGiornata').value='';
+  render();
+  showToast('Modifica annullata');
+  goPage(3);
 }
 
 async function eliminaRapportino(){
