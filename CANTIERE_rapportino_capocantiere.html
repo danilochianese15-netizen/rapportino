@@ -913,7 +913,7 @@ async function confermaSalva(){
     operatori.push({id,nome:d.nome,ini:d.ini,totale_ore:conf.reduce((s,r)=>s+r.ore,0),righe:conf.map(r=>({...r}))});
   });
   const payload={
-    id:'CANT-'+Date.now(),data,note,
+    id:'CANT-'+cfg.commessa_id+'-'+data,data,note,
     capocantiere:cfg?.capo||'',
     commessa_id:cfg?.commessa_id||'',
     commessa_desc:cfg?.commessa_desc||'',
@@ -930,9 +930,11 @@ async function confermaSalva(){
   btn.textContent='⏳ Invio…';
   // Se questo salvataggio è una MODIFICA e la data è cambiata,
   // elimina prima la vecchia riga sul Google Sheet per evitare doppioni.
-  if(_modificaOriginale && (_modificaOriginale.data !== payload.data || _modificaOriginale.commessa_id !== payload.commessa_id)){
+  if(_modificaOriginale && _modificaOriginale.id !== payload.id){
+    // La data o la commessa sono cambiate durante la modifica: l'ID nuovo è diverso da quello vecchio,
+    // quindi va eliminata esplicitamente la vecchia riga (altrimenti resterebbe duplicata).
     try{
-      await fetch(APPS_URL,{method:'POST',headers:{'Content-Type':'text/plain'},body:JSON.stringify({tipo:'elimina',data:_modificaOriginale.data,commessa_id:_modificaOriginale.commessa_id})});
+      await fetch(APPS_URL,{method:'POST',headers:{'Content-Type':'text/plain'},body:JSON.stringify({tipo:'elimina',data:_modificaOriginale.data,commessa_id:_modificaOriginale.commessa_id,id:_modificaOriginale.id})});
     }catch(e){ console.log('Pulizia vecchia riga:', e); }
   }
   _modificaOriginale = null;
@@ -1010,7 +1012,7 @@ async function modificaRapportino(){
   const r=rapportinoDettaglio;
   // Memorizza data+commessa originali: servono per eliminare la vecchia riga
   // dal Google Sheet al momento del ri-salvataggio, anche se la data viene cambiata.
-  _modificaOriginale = { data: r.data, commessa_id: r.commessa_id };
+  _modificaOriginale = { data: r.data, commessa_id: r.commessa_id, id: r.id };
   document.getElementById('dataRapportino').value=r.data;
   document.getElementById('noteGiornata').value=r.note||'';
   presenti=r.operatori.map(o=>o.id);
@@ -1039,7 +1041,8 @@ async function eliminaRapportino(){
       body:JSON.stringify({
         tipo:'elimina',
         data: r.data,
-        commessa_id: r.commessa_id
+        commessa_id: r.commessa_id,
+        id: r.id
       })
     });
   }catch(e){ console.log('Elimina sheets:', e); }
