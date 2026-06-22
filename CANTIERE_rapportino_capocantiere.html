@@ -507,14 +507,19 @@ async function aggiungiCommessa(){
   showToast('⏳ Salvataggio commessa…');
   try{
     await fetch(APPS_URL,{method:'POST',headers:{'Content-Type':'text/plain'},body:JSON.stringify({tipo:'aggiungi_commessa',commessa_id:id,commessa_desc:desc})});
-    await caricaCommesseRemote();
-    document.getElementById('newCommId').value = '';
-    document.getElementById('newCommDesc').value = '';
-    renderCommesseLista();
-    showToast('✅ Commessa aggiunta e condivisa!');
   }catch(e){
     showToast('⚠️ Errore di connessione, riprova');
+    return;
   }
+  await caricaCommesseRemote();
+  const sel = document.getElementById('settComm');
+  if(sel && ![...sel.options].some(o=>o.value===id)){
+    const o = document.createElement('option'); o.value=id; o.textContent=`${id} · ${desc}`; sel.appendChild(o);
+  }
+  document.getElementById('newCommId').value = '';
+  document.getElementById('newCommDesc').value = '';
+  renderCommesseLista();
+  showToast('✅ Commessa aggiunta e condivisa! Selezionala dal menu sopra.');
 }
 
 function eliminaCommessaCustom(id){
@@ -560,16 +565,22 @@ async function aggiungiCommessaSetup(){
   showToast('⏳ Salvataggio commessa…');
   try{
     await fetch(APPS_URL,{method:'POST',headers:{'Content-Type':'text/plain'},body:JSON.stringify({tipo:'aggiungi_commessa',commessa_id:id,commessa_desc:desc})});
-    await caricaCommesseRemote();
-    document.getElementById('setupCommessa').value = id;
-    document.getElementById('setupNewCommId').value = '';
-    document.getElementById('setupNewCommDesc').value = '';
-    document.getElementById('setupNewCommForm').style.display = 'none';
-    document.getElementById('btnSetup').disabled = !document.getElementById('setupCapo').value;
-    showToast('✅ Commessa aggiunta e selezionata!');
   }catch(e){
     showToast('⚠️ Errore di connessione, riprova');
+    return;
   }
+  await caricaCommesseRemote();
+  const sel = document.getElementById('setupCommessa');
+  // Garantisce che l'opzione esista nel select, anche se il refresh remoto non l'ha ancora inclusa
+  if(![...sel.options].some(o=>o.value===id)){
+    const o = document.createElement('option'); o.value=id; o.textContent=`${id} · ${desc}`; sel.appendChild(o);
+  }
+  sel.value = id;
+  document.getElementById('setupNewCommId').value = '';
+  document.getElementById('setupNewCommDesc').value = '';
+  document.getElementById('setupNewCommForm').style.display = 'none';
+  document.getElementById('btnSetup').disabled = !document.getElementById('setupCapo').value || !sel.value;
+  showToast('✅ Commessa aggiunta e selezionata: '+id);
 }
 
 // ══════════════ SETUP ══════════════
@@ -885,6 +896,10 @@ function generaPDF(payload, firmaDataUrl){
 
 // ══════════════ SALVA ══════════════
 async function confermaSalva(){
+  if(!cfg || !cfg.commessa_id){
+    showToast('⚠️ Nessuna commessa configurata! Vai su ⚙️ Impostazioni');
+    return;
+  }
   if(!firmaPresente){showToast('⚠️ Aggiungi la firma prima di salvare!');return;}
   const btn=document.getElementById('btnConf');
   btn.disabled=true;btn.textContent='⏳ Generazione PDF…';
@@ -1002,13 +1017,8 @@ function modificaRapportino(){
 async function eliminaRapportino(){
   if(!rapportinoDettaglio||!confirm('Eliminare questo rapportino?'))return;
   const r = rapportinoDettaglio;
-  // Elimina locale
-  const st=getRapportini().filter(x=>x.id!==r.id);
-  salvaRapportini(st);
-  showToast('🗑 Eliminato');
-  goBackStorico();
-  renderStorico();
-  // Sincronizza eliminazione su Google Sheets
+  showToast('⏳ Eliminazione in corso…');
+  // 1. Elimina dal Google Sheet PRIMA (fonte di verità per la dashboard)
   try{
     await fetch(APPS_URL,{
       method:'POST',
@@ -1020,6 +1030,12 @@ async function eliminaRapportino(){
       })
     });
   }catch(e){ console.log('Elimina sheets:', e); }
+  // 2. Elimina anche dalla copia locale
+  const st=getRapportini().filter(x=>x.id!==r.id);
+  salvaRapportini(st);
+  showToast('🗑 Eliminato');
+  goBackStorico();
+  renderStorico();
 }
 
 function goBackStorico(){
@@ -1090,7 +1106,7 @@ function goPage(n){
   document.getElementById('headerSubText').textContent=subLabels[n-1];
   if(n===2)renderRip();
   if(n===3)renderStorico(document.getElementById('stSearch').value);
-  if(n===4)caricaDashboard();
+  if(n===4)caricaDashboard(); // ricarica sempre fresh dal Google Sheet, nessuna cache
   window.scrollTo(0,0);
 }
 
