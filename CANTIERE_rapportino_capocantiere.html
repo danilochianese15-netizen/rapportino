@@ -278,6 +278,10 @@ label{display:block;font-size:10px;font-weight:700;color:var(--muted);margin-bot
     <div class="modal-handle"></div>
     <div class="modal-head"><div class="modal-title">Seleziona Operatori</div><div class="modal-sub" id="modalSub">Chi è presente oggi</div></div>
     <div class="modal-search"><input type="text" id="searchOp" placeholder="Cerca…" oninput="filterModal(this.value)" autocomplete="off"><span class="modal-search-icon">🔍</span></div>
+    <div style="display:flex;gap:6px;padding:0 16px 10px">
+      <input type="text" id="newDipInput" placeholder="Aggiungi nuovo dipendente (nome e cognome)…" autocomplete="off" style="flex:1;background:var(--bg);border:1px solid var(--border);border-radius:7px;padding:8px 10px;font-family:'DM Sans',sans-serif;font-size:13px;color:var(--text);outline:none" onkeydown="if(event.key==='Enter')aggiungiDipendente()">
+      <button onclick="aggiungiDipendente()" style="padding:8px 12px;background:var(--accent);color:white;border:none;border-radius:7px;font-family:'DM Sans',sans-serif;font-size:12px;font-weight:600;cursor:pointer;white-space:nowrap">+ Aggiungi</button>
+    </div>
     <div class="modal-body" id="modalBody"></div>
     <div class="modal-footer">
       <button class="btn-modal-cancel" onclick="closeModal()">Annulla</button>
@@ -464,7 +468,7 @@ function getLav(){ return JSON.parse(localStorage.getItem(LAV_KEY)||'null') || [
 function salvaLav(arr){ localStorage.setItem(LAV_KEY, JSON.stringify(arr)); }
 function getRapportini(){ return JSON.parse(localStorage.getItem(RAP_KEY)||'[]'); }
 function salvaRapportini(arr){ localStorage.setItem(RAP_KEY, JSON.stringify(arr)); }
-function getDip(id){ return DB_DIPENDENTI.find(d=>d.id===id)||{id,nome:id,ini:id.slice(0,2).toUpperCase()}; }
+function getDip(id){ return getDipendenti().find(d=>d.id===id)||{id,nome:id,ini:id.slice(0,2).toUpperCase()}; }
 function initDati(ids){ ids.forEach(id=>{ if(!dati[id]) dati[id]=[newR()]; }); }
 function newR(){ return {lavorazione:'',ubicazione:'CANTIERE',ore:8,notturno:false,confermato:false}; }
 function opts(arr,val,ph){ return `<option value="">${ph}</option>`+arr.map(v=>`<option${v===val?' selected':''}>${v}</option>`).join(''); }
@@ -473,6 +477,49 @@ function totG(){ return presenti.reduce((s,id)=>s+totD(id),0); }
 function anyConf(){ return presenti.some(id=>(dati[id]||[]).some(r=>r.confermato)); }
 function fmtData(raw){ const d=new Date(raw+'T12:00:00'); return d.toLocaleDateString('it-IT',{weekday:'long',day:'2-digit',month:'long',year:'numeric'}); }
 
+
+// ══════════════ DIPENDENTI CONDIVISI ══════════════
+const DIP_KEY = 'dipendenti_cantiere_extra';
+let _dipendentiCache = null;
+
+function getDipendenti(){
+  if (_dipendentiCache) return _dipendentiCache;
+  const custom = JSON.parse(localStorage.getItem(DIP_KEY)||'[]');
+  return [...DB_DIPENDENTI, ...custom];
+}
+
+async function caricaDipendentiRemote(){
+  try{
+    const res = await fetch(`${APPS_URL}?action=leggi_dipendenti`);
+    const data = await res.json();
+    if(data.ok && data.dipendenti){
+      const baseNomi = new Set(DB_DIPENDENTI.map(d=>d.nome));
+      const soloRemote = data.dipendenti
+        .filter(d=>!baseNomi.has(d.nome))
+        .map(d=>({id:d.nome, nome:d.nome, ini:d.nome.split(' ').map(p=>p[0]).join('').slice(0,2).toUpperCase()}));
+      _dipendentiCache = [...DB_DIPENDENTI, ...soloRemote];
+      localStorage.setItem(DIP_KEY, JSON.stringify(soloRemote));
+    }
+  }catch(e){ console.log('Dipendenti remote non disponibili, uso cache locale'); }
+}
+
+async function aggiungiDipendente(){
+  const input = document.getElementById('newDipInput');
+  const nome = input.value.trim();
+  if(!nome){ showToast('⚠️ Inserisci nome e cognome'); return; }
+  if(getDipendenti().find(d=>d.nome.toLowerCase()===nome.toLowerCase())){ showToast('Dipendente già presente'); return; }
+  showToast('⏳ Salvataggio dipendente…');
+  try{
+    await fetch(APPS_URL,{method:'POST',headers:{'Content-Type':'text/plain'},body:JSON.stringify({tipo:'aggiungi_dipendente', nome})});
+  }catch(e){
+    showToast('⚠️ Errore di connessione, riprova');
+    return;
+  }
+  await caricaDipendentiRemote();
+  input.value = '';
+  renderModal(document.getElementById('searchOp').value);
+  showToast('✅ '+nome+' aggiunto alla lista!');
+}
 
 // ══════════════ COMMESSE PERSONALIZZATE ══════════════
 const COMM_KEY = 'commesse_cantiere';
@@ -589,12 +636,19 @@ async function aggiungiCommessaSetup(){
 }
 
 // ══════════════ SETUP ══════════════
+function popolaSelectCapo(selectEl, valoreCorrente){
+  selectEl.innerHTML = '<option value="">— seleziona il tuo nome —</option>' +
+    getDipendenti().map(d=>`<option value="${d.nome}"${d.nome===valoreCorrente?' selected':''}>${d.nome}</option>`).join('');
+}
+
 async function initSetup(){
   const selCapo = document.getElementById('setupCapo');
   const selComm = document.getElementById('setupCommessa');
-  DB_DIPENDENTI.forEach(d=>{ const o=document.createElement('option');o.value=d.nome;o.textContent=d.nome;selCapo.appendChild(o); });
+  popolaSelectCapo(selCapo, '');
   aggiornaSelectCommesse(); // mostra subito la lista base/cache mentre carica
   await caricaCommesseRemote(); // poi aggiorna con i dati dal server
+  await caricaDipendentiRemote();
+  popolaSelectCapo(selCapo, '');
   [selCapo,selComm].forEach(s=>s.addEventListener('change',()=>{
     document.getElementById('btnSetup').disabled = !selCapo.value || !selComm.value;
   }));
@@ -613,11 +667,13 @@ function completaSetup(){
 async function apriImpostazioni(){
   const sc = document.getElementById('settCapo');
   const sm = document.getElementById('settComm');
-  sc.innerHTML = DB_DIPENDENTI.map(d=>`<option value="${d.nome}"${d.nome===cfg?.capo?' selected':''}>${d.nome}</option>`).join('');
+  popolaSelectCapo(sc, cfg?.capo||'');
   aggiornaSelectCommesse(); renderCommesseLista();
   const emailExtra = localStorage.getItem('email_extra_cantiere')||''; document.getElementById('settEmailExtra').value = emailExtra;
   document.getElementById('modalSettings').classList.add('open');
   await caricaCommesseRemote(); // aggiorna con i dati più recenti dal server
+  await caricaDipendentiRemote();
+  popolaSelectCapo(sc, cfg?.capo||'');
   renderCommesseLista();
 }
 
@@ -653,7 +709,7 @@ function apriModal(){ tempSelezione=[...presenti]; renderModal(''); document.get
 function closeModal(){ document.getElementById('modalOp').classList.remove('open'); }
 function renderModal(q){
   const body=document.getElementById('modalBody');
-  const list=DB_DIPENDENTI.filter(d=>!q||d.nome.toLowerCase().includes(q.toLowerCase()));
+  const list=getDipendenti().filter(d=>!q||d.nome.toLowerCase().includes(q.toLowerCase()));
   body.innerHTML=list.map(d=>{const sel=tempSelezione.includes(d.id);return`<div class="dip-option${sel?' selected':''}" onclick="toggleModal('${d.id}')"><div class="dop-av">${d.ini}</div><div style="flex:1"><div class="dop-name">${d.nome}</div></div><div class="dop-check">✓</div></div>`;}).join('');
   document.getElementById('modalSub').textContent=`${tempSelezione.length} selezionati`;
 }
