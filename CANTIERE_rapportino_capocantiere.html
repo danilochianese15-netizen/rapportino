@@ -654,9 +654,18 @@ async function initSetup(){
   }));
 }
 
+function verificaPasswordCommessa(commId){
+  const pwd = prompt(`🔒 Inserisci la password per accedere alla commessa ${commId}:`);
+  if(pwd === null) return false; // annullato
+  if(pwd.trim() === commId + '!') return true;
+  showToast('❌ Password errata');
+  return false;
+}
+
 function completaSetup(){
   const capo = document.getElementById('setupCapo').value;
   const commId = document.getElementById('setupCommessa').value;
+  if(!verificaPasswordCommessa(commId)) return;
   const comm = getCommesse().find(c=>c.id===commId);
   cfg = {capo, commessa_id: commId, commessa_desc: comm?.desc||''};
   localStorage.setItem(CONF_KEY, JSON.stringify(cfg));
@@ -680,6 +689,8 @@ async function apriImpostazioni(){
 function salvaImpostazioni(){
   const capo = document.getElementById('settCapo').value;
   const commId = document.getElementById('settComm').value;
+  const commessaCambiata = !cfg || cfg.commessa_id !== commId;
+  if(commessaCambiata && !verificaPasswordCommessa(commId)) return;
   const comm = getCommesse().find(c=>c.id===commId);
   cfg = {capo, commessa_id: commId, commessa_desc: comm?.desc||''};
   localStorage.setItem(CONF_KEY, JSON.stringify(cfg));
