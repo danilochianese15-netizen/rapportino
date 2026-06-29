@@ -1030,6 +1030,22 @@ async function confermaSalva(){
 // ══════════════ STORICO ══════════════
 let _storicoRemoteCache = null; // cache dei rapportini ricostruiti dal Google Sheet
 
+function normalizzaDataSheet(raw){
+  // Se è già pulita (YYYY-MM-DD, 10 caratteri, niente T) usala direttamente
+  if(/^\d{4}-\d{2}-\d{2}$/.test(raw)) return raw;
+  // Se è una stringa ISO con timestamp (es. 2026-06-28T22:00:00.000Z),
+  // va interpretata in UTC e poi riportata alla data civile italiana.
+  const d = new Date(raw);
+  if(isNaN(d)) return raw.substring(0,10);
+  // Aggiungi l'offset per ottenere la data locale italiana (Europe/Rome)
+  const opts = {timeZone:'Europe/Rome', year:'numeric', month:'2-digit', day:'2-digit'};
+  const parts = new Intl.DateTimeFormat('en-CA', opts).formatToParts(d);
+  const y = parts.find(p=>p.type==='year').value;
+  const m = parts.find(p=>p.type==='month').value;
+  const dd = parts.find(p=>p.type==='day').value;
+  return `${y}-${m}-${dd}`;
+}
+
 async function caricaStoricoRemote(){
   if(!cfg || !cfg.commessa_id) return [];
   try{
@@ -1065,7 +1081,7 @@ async function caricaStoricoRemote(){
         totale_ore: righe.reduce((s,r)=>s+r.ore,0), righe
       }));
       return {
-        id: g.ID, data: g.Data ? g.Data.substring(0,10) : '',
+        id: g.ID, data: g.Data ? normalizzaDataSheet(g.Data) : '',
         note: g.Note || '', capocantiere: g.Capocantiere || '',
         commessa_id: g.Commessa, commessa_desc: g.CommessaDesc || '',
         timestamp: g.Timestamp, totale_ore: parseFloat(g['Ore Totali']) || 0,
